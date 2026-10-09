@@ -1,0 +1,13 @@
+{
+  "event_name": "Python Backend Bootcamp 2026",
+  "issuer": "Aereo Academy",
+  "issue_date": "2026-10-07",
+  "recipients": [
+    { "name": "Arun Kumar",   "email": "arun@example.com" },
+    { "name": "Priya Sharma", "email": "priya@example.com", "completion_date": "2026-10-01" },
+    { "name": "Rahul Verma",  "email": "rahul@example.com" },
+    { "name": "",             "email": "blank-name@example.com" },
+    { "name": "Bad Email",    "email": "not-an-email" },
+    { "name": "Arun Again",   "email": "ARUN@example.com" }
+  ]
+}
