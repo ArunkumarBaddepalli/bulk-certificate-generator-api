@@ -1,0 +1,15 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# New → Blueprint → pick this repo → deploys the Dockerfile on the free plan.
+#
+# Free tier notes: the filesystem is ephemeral, so the SQLite file and generated
+# PDFs reset on every deploy or wake-up. Fine for a demo; for persistence point
+# DATABASE_URL at a Postgres instance and CERT_STORAGE_DIR at a disk/S3.
+services:
+  - type: web
+    name: bulk-certificate-generator-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MAX_RECIPIENTS_PER_JOB
+        value: "1000"
