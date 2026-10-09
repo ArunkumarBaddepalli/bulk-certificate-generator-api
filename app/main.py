@@ -3,6 +3,7 @@
 import io
 import zipfile
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse, StreamingResponse
@@ -79,6 +80,15 @@ def _safe_filename(name: str | None) -> str:
 
 
 # ---------- routes ----------
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    """Minimal web client for the API. Pure static HTML + JS, no build step."""
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
 @app.get("/health", tags=["meta"])

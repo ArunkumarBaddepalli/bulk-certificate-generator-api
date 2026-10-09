@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk Certificate Generator</title>
+<meta name="description" content="Submit many recipients once; certificates are generated in the background and downloadable individually or as a ZIP.">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --fg: #1a1f2b; --muted: #5b6472; --line: #e3e6eb;
+    --accent: #1f3a5f; --accent-fg: #ffffff;
+    --ok: #1f7a3e; --ok-bg: #e4f4ea; --bad: #b42318; --bad-bg: #fbe9e7;
+    --warn: #9a5b00; --warn-bg: #fff3d6; --info: #1d4ed8; --info-bg: #e6edff; --neutral-bg: #eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --card: #171b23; --fg: #e7eaf0; --muted: #9aa3b2; --line: #2a303b;
+      --accent: #7aa2d8; --accent-fg: #0f1218;
+      --ok: #5ed38a; --ok-bg: #12331f; --bad: #ff8a80; --bad-bg: #3a1a17;
+      --warn: #ffc866; --warn-bg: #3a2a0c; --info: #8ab4ff; --info-bg: #15224a; --neutral-bg: #232936;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 48px; }
+  header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 22px; color: var(--muted); }
+  a { color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+  input, textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--neutral-bg); padding: 1px 6px; border-radius: 5px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  .between { justify-content: space-between; }
+  button, .btn { appearance: none; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; }
+  button:disabled { opacity: .55; cursor: default; }
+  .ghost { background: transparent; color: var(--accent); }
+  .inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .inline input { width: auto; margin: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .error { color: var(--bad); }
+  .hidden { display: none; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+  .b-PENDING, .b-RUNNING { background: var(--info-bg); color: var(--info); }
+  .b-COMPLETED, .b-GENERATED { background: var(--ok-bg); color: var(--ok); }
+  .b-PARTIAL { background: var(--warn-bg); color: var(--warn); }
+  .b-FAILED { background: var(--bad-bg); color: var(--bad); }
+  .bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--neutral-bg); margin: 14px 0 8px; }
+  .bar > div { height: 100%; transition: width .3s; }
+  #bar-ok { background: var(--ok); } #bar-fail { background: var(--bad); }
+  .counts { display: flex; gap: 18px; color: var(--muted); font-size: 13px; }
+  .counts b { color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  td.err { color: var(--bad); font-size: 13px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .replay { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bulk Certificate Generator</h1>
+    <p>Submit many recipients once &rarr; PDFs are generated in the background &rarr; poll progress &rarr; download one by one or as a ZIP.
+       &nbsp;<a href="/docs">API docs</a> &middot; <a href="https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api">Source</a></p>
+  </header>
+
+  <section class="card" id="form-card">
+    <div class="grid">
+      <label>Event name <input id="event_name" value="Python Backend Bootcamp 2026"></label>
+      <label>Issuer <input id="issuer" value="Aereo Academy"></label>
+      <label>Issue date <input id="issue_date" type="date"></label>
+    </div>
+    <label style="margin-top:14px">Recipients &mdash; one per line: <code>Name, email, completion date (optional)</code>
+      <textarea id="recipients" rows="8" spellcheck="false"></textarea>
+    </label>
+    <div class="row">
+      <button id="submit">Generate certificates</button>
+      <button class="ghost" id="sample" type="button">Load sample (3 good + 3 bad rows)</button>
+      <label class="inline"><input type="checkbox" id="idem" checked> Send <code>Idempotency-Key</code></label>
+    </div>
+    <p class="hint error" id="form-error"></p>
+  </section>
+
+  <section class="card hidden" id="job-card">
+    <div class="row between" style="margin-top:0">
+      <div><strong>Job</strong> <code id="job-id"></code></div>
+      <span class="badge" id="job-status">PENDING</span>
+    </div>
+    <div class="bar"><div id="bar-ok" style="width:0"></div><div id="bar-fail" style="width:0"></div></div>
+    <div class="counts">
+      <span>Generated <b id="c-ok">0</b></span>
+      <span>Failed <b id="c-fail">0</b></span>
+      <span>Total <b id="c-total">0</b></span>
+    </div>
+    <div class="row">
+      <a class="btn" id="zip" href="#">Download all (ZIP)</a>
+      <a class="btn ghost" id="json" href="#" target="_blank" rel="noopener">Job JSON</a>
+      <button class="ghost" id="replay" type="button" title="Re-sends the exact same request with the same Idempotency-Key">Resend same request</button>
+      <span class="replay" id="replay-out"></span>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Result</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <footer>FastAPI &middot; SQLAlchemy &middot; ReportLab &middot; background generation with per-recipient failure isolation.
+    Free-tier hosting: first request after idle may take ~40&nbsp;s.</footer>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const SAMPLE = [
+    "Arun Kumar, arun@example.com",
+    "Priya Sharma, priya@example.com, 2026-10-01",
+    "Rahul Verma, rahul@example.com",
+    ", blank-name@example.com",
+    "Bad Email, not-an-email",
+    "Arun Again, ARUN@example.com",
+  ].join("\n");
+
+  let lastRequest = null; // { body, headers } for the replay button
+  let pollTimer = null;
+
+  $("#issue_date").value = new Date().toISOString().slice(0, 10);
+  $("#recipients").value = SAMPLE;
+  $("#sample").addEventListener("click", () => { $("#recipients").value = SAMPLE; });
+
+  function parseRecipients(text) {
+    return text.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      const [name = "", email = "", completion_date = ""] = line.split(",").map(s => s.trim());
+      const r = { name, email };
+      if (completion_date) r.completion_date = completion_date;
+      return r;
+    });
+  }
+
+  function badge(el, status) { el.textContent = status; el.className = "badge b-" + status; }
+
+  function renderRows(items) {
+    const tb = $("#rows"); tb.textContent = "";
+    for (const c of items) {
+      const tr = document.createElement("tr");
+      const td = (txt, cls) => { const d = document.createElement("td"); d.textContent = txt ?? ""; if (cls) d.className = cls; tr.appendChild(d); return d; };
+      td(c.recipient_name || "—");
+      td(c.recipient_email || "—");
+      const s = td(""); const b = document.createElement("span"); badge(b, c.status); s.appendChild(b);
+      if (c.status === "GENERATED") {
+        const d = document.createElement("td"); const a = document.createElement("a");
+        a.href = c.download_url; a.textContent = "Download PDF"; d.appendChild(a); tr.appendChild(d);
+      } else {
+        td(c.error_message || (c.status === "PENDING" ? "queued" : ""), c.status === "FAILED" ? "err" : "");
+      }
+      tb.appendChild(tr);
+    }
+  }
+
+  async function refresh(jobId) {
+    const job = await (await fetch(`/jobs/${jobId}`)).json();
+    const p = job.progress;
+    badge($("#job-status"), job.status);
+    $("#c-ok").textContent = p.succeeded; $("#c-fail").textContent = p.failed; $("#c-total").textContent = p.total;
+    $("#bar-ok").style.width = (100 * p.succeeded / p.total) + "%";
+    $("#bar-fail").style.width = (100 * p.failed / p.total) + "%";
+    const certs = await (await fetch(`/jobs/${jobId}/certificates?limit=1000`)).json();
+    renderRows(certs.items);
+    const terminal = ["COMPLETED", "PARTIAL", "FAILED"].includes(job.status);
+    $("#zip").style.visibility = (terminal && p.succeeded > 0) ? "visible" : "hidden";
+    return terminal;
+  }
+
+  function startPolling(jobId) {
+    clearInterval(pollTimer);
+    const tick = async () => { if (await refresh(jobId)) clearInterval(pollTimer); };
+    tick(); pollTimer = setInterval(tick, 1500);
+  }
+
+  async function post(req) {
+    return fetch("/jobs", { method: "POST", headers: { "Content-Type": "application/json", ...req.headers }, body: req.body });
+  }
+
+  $("#submit").addEventListener("click", async () => {
+    $("#form-error").textContent = "";
+    const recipients = parseRecipients($("#recipients").value);
+    if (!recipients.length) { $("#form-error").textContent = "Add at least one recipient."; return; }
+    const payload = {
+      event_name: $("#event_name").value.trim(), issuer: $("#issuer").value.trim(),
+      issue_date: $("#issue_date").value, recipients,
+    };
+    const headers = {};
+    if ($("#idem").checked) headers["Idempotency-Key"] = "ui-" + crypto.randomUUID();
+    lastRequest = { body: JSON.stringify(payload), headers };
+
+    $("#submit").disabled = true;
+    try {
+      const r = await post(lastRequest);
+      const data = await r.json();
+      if (!r.ok) { $("#form-error").textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail); return; }
+      $("#job-card").classList.remove("hidden");
+      $("#job-id").textContent = data.job_id;
+      $("#zip").href = `/jobs/${data.job_id}/download`;
+      $("#json").href = `/jobs/${data.job_id}`;
+      $("#replay-out").textContent = "";
+      $("#replay").disabled = !headers["Idempotency-Key"];
+      startPolling(data.job_id);
+      $("#job-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      $("#form-error").textContent = "Request failed: " + e.message;
+    } finally {
+      $("#submit").disabled = false;
+    }
+  });
+
+  $("#replay").addEventListener("click", async () => {
+    if (!lastRequest) return;
+    const r = await post(lastRequest);
+    const data = await r.json();
+    $("#replay-out").textContent = `HTTP ${r.status} — same job ${data.job_id === $("#job-id").textContent ? "returned, nothing regenerated" : "NOT returned"}`;
+  });
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml)
 
-**Live demo:** https://bulk-certificate-generator-api-4slj.onrender.com/docs — interactive Swagger, try it without cloning.
+**Live demo:** https://bulk-certificate-generator-api-4slj.onrender.com — web client at `/`, Swagger at `/docs`. Try it without cloning.
 *(Free tier: first request after idle takes ~40 s to wake; data resets on restart.)*
 
 Submit a list of recipients once. The API validates each one, generates a PDF certificate per valid recipient in the background, and lets you poll progress and download the results — individually or as a single ZIP.
@@ -16,7 +16,7 @@ Submit a list of recipients once. The API validates each one, generates a PDF ce
 - Live progress: `GET /jobs/{id}` shows `succeeded` / `failed` counts while the job runs.
 - Filter results by status, paginate, download any generated PDF, or the whole job as a ZIP.
 - `Idempotency-Key` header: a retried request returns the original job instead of generating everything twice.
-- Swagger UI at `/docs`.
+- Swagger UI at `/docs`; a small web client at `/` (static HTML + JS, no build step) for submitting, watching progress, and downloading.
 
 ---
 
@@ -208,6 +208,7 @@ One entry per `GENERATED` certificate, named `{recipient}_{certificate_id}.pdf`.
 ```
 app/
   main.py        FastAPI routes only — thin, delegates to service
+  static/        index.html — the web client, served at /
   service.py     create_job()   per-recipient validation, writes rows
                  process_job()  background worker, per-item try/except
   generator.py   render_certificate()  ReportLab template, pure function
