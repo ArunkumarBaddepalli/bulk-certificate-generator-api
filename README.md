@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml)
 
+**Live demo:** https://bulk-certificate-generator-api-4slj.onrender.com/docs — interactive Swagger, try it without cloning.
+*(Free tier: first request after idle takes ~40 s to wake; data resets on restart.)*
+
 Submit a list of recipients once. The API validates each one, generates a PDF certificate per valid recipient in the background, and lets you poll progress and download the results — individually or as a single ZIP.
 
 **Stack:** Python · FastAPI · SQLAlchemy (SQLite by default, Postgres-ready) · ReportLab · pytest · Docker
@@ -36,6 +39,10 @@ make run                           # = uvicorn app.main:app --reload
 ```bash
 docker compose up --build
 ```
+
+**Option C — nothing to install**
+
+Use the live demo above. Same curl commands below work against it — swap `http://127.0.0.1:8000` for `https://bulk-certificate-generator-api-4slj.onrender.com`.
 
 Either way, open http://127.0.0.1:8000/docs. The SQLite file and `storage/` folder are created on first run (inside a named volume for Docker).
 
