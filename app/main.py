@@ -1,8 +1,10 @@
 """FastAPI application: routes only. Business logic lives in service.py."""
+import io
+import zipfile
 from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from . import config, models, schemas, service
@@ -69,6 +71,11 @@ def _get_job_or_404(db: Session, job_id: str) -> models.Job:
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return job
+
+
+def _safe_filename(name: str | None) -> str:
+    """Recipient names are user input; keep only [A-Za-z0-9] for the download filename."""
+    return "".join(ch if ch.isalnum() else "_" for ch in (name or "certificate"))
 
 
 # ---------- routes ----------
@@ -155,9 +162,45 @@ def download_certificate(cert_id: str, db: Session = Depends(get_db)):
             detail={"status": cert.status.value, "error_message": cert.error_message},
         )
 
-    safe_name = "".join(ch if ch.isalnum() else "_" for ch in (cert.recipient_name or "certificate"))
     return FileResponse(
         cert.file_path,
         media_type="application/pdf",
-        filename=f"certificate_{safe_name}.pdf",
+        filename=f"certificate_{_safe_filename(cert.recipient_name)}.pdf",
+    )
+
+
+@app.get("/jobs/{job_id}/download", tags=["certificates"])
+def download_job_zip(job_id: str, db: Session = Depends(get_db)):
+    """Download every GENERATED certificate in a job as one ZIP.
+
+    Built in memory: at 1000 recipients x ~2 KB per PDF that is ~2 MB, well
+    within reason. Streaming to a temp file would be the change for much
+    larger jobs.
+    """
+    job = _get_job_or_404(db, job_id)
+    if job.status not in service.TERMINAL_STATES:
+        raise HTTPException(
+            status_code=409,
+            detail={"status": job.status.value, "message": "job still running; poll GET /jobs/{id}"},
+        )
+
+    certs = (
+        db.query(models.Certificate)
+        .filter_by(job_id=job_id, status=models.CertStatus.GENERATED)
+        .order_by(models.Certificate.created_at)
+        .all()
+    )
+    if not certs:
+        raise HTTPException(status_code=404, detail="no generated certificates for this job")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for cert in certs:
+            zf.write(cert.file_path, arcname=f"{_safe_filename(cert.recipient_name)}_{cert.id}.pdf")
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="certificates_{job_id}.zip"'},
     )
