@@ -1,20 +1,25 @@
 # Bulk Certificate Generator API
 
-Submit a list of recipients once. The API validates each one, generates a PDF certificate per valid recipient in the background, and lets you poll progress and download the results — individually or as a batch.
+[![CI](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml)
 
-**Stack:** Python · FastAPI · SQLAlchemy (SQLite by default, Postgres-ready) · ReportLab · pytest
+Submit a list of recipients once. The API validates each one, generates a PDF certificate per valid recipient in the background, and lets you poll progress and download the results — individually or as a single ZIP.
+
+**Stack:** Python · FastAPI · SQLAlchemy (SQLite by default, Postgres-ready) · ReportLab · pytest · Docker
 
 **Features**
 - One request → many certificates. Up to 1000 recipients per job.
 - Per-recipient validation: a bad row is recorded as `FAILED` with the reason; the rest proceed.
 - Per-recipient failure isolation at generation time: one crash never stops the batch.
 - Live progress: `GET /jobs/{id}` shows `succeeded` / `failed` counts while the job runs.
-- Filter results by status, paginate, download any generated PDF.
+- Filter results by status, paginate, download any generated PDF, or the whole job as a ZIP.
+- `Idempotency-Key` header: a retried request returns the original job instead of generating everything twice.
 - Swagger UI at `/docs`.
 
 ---
 
 ## Quick start
+
+**Option A — local Python**
 
 ```bash
 git clone https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api.git
@@ -22,12 +27,19 @@ cd bulk-certificate-generator-api
 
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-uvicorn app.main:app --reload
+make install                       # = pip install -r requirements.txt
+make run                           # = uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000/docs. The SQLite file and `storage/` folder are created on first run.
+**Option B — Docker**
+
+```bash
+docker compose up --build
+```
+
+Either way, open http://127.0.0.1:8000/docs. The SQLite file and `storage/` folder are created on first run (inside a named volume for Docker).
+
+`make test` runs the suite, `make lint` runs ruff.
 
 Optional environment variables (see `.env.example`):
 
@@ -43,7 +55,7 @@ Optional environment variables (see `.env.example`):
 pytest
 ```
 
-36 tests, in-memory SQLite, temp folder for PDFs. Nothing touches your real database or disk.
+47 tests, in-memory SQLite, temp folder for PDFs. Nothing touches your real database or disk. The same suite runs in CI on Python 3.12 and 3.13.
 
 ---
 
@@ -87,6 +99,17 @@ curl -s -X POST http://127.0.0.1:8000/jobs \
 ```
 
 `accepted` = passed validation and queued. `rejected` = failed validation and recorded as `FAILED` with a reason. The response returns immediately; generation happens in the background.
+
+**Safe retries with `Idempotency-Key`**
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/jobs \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: event-42-batch-1" \
+  -d @examples/request.json
+```
+
+Send the same key again — because of a timeout, a retry loop, a double-click — and you get the **same job back with `200`** instead of a second job and a second set of PDFs. The key is optional; without it every request creates a new job.
 
 ## Check progress
 
@@ -163,6 +186,14 @@ curl -s -o certificate.pdf http://127.0.0.1:8000/certificates/{certificate_id}/d
 
 Returns `application/pdf` with a `Content-Disposition: attachment` header. `404` if the id is unknown; `409` with the error message if that certificate is `FAILED`.
 
+**Download the whole job as a ZIP:**
+
+```bash
+curl -s -o certificates.zip http://127.0.0.1:8000/jobs/{job_id}/download
+```
+
+One entry per `GENERATED` certificate, named `{recipient}_{certificate_id}.pdf`. Failed recipients are simply absent — check `?status=FAILED` for those. `409` while the job is still running; `404` if nothing was generated.
+
 ---
 
 ## Architecture
@@ -182,29 +213,42 @@ tests/           one file per required test area
 
 **Request flow**
 
+```mermaid
+flowchart TD
+    C[Client] -->|POST /jobs| R[main.create_job]
+    R -->|Idempotency-Key seen before?| K{existing job?}
+    K -->|yes| R200[200 · same job]
+    K -->|no| S[service.create_job]
+    S -->|validate each recipient| DB[(1 Job + N Certificate rows)]
+    DB --> R202[202 · job_id]
+    R202 -.->|BackgroundTasks, after response| W[service.process_job]
+    W -->|atomic claim PENDING → RUNNING| L[for each PENDING cert]
+    L --> G[render_certificate → PDF on disk]
+    G -->|ok| OK[mark GENERATED]
+    G -->|exception| F[mark FAILED + reason]
+    OK --> CM[commit per item]
+    F --> CM
+    CM --> L
+    L -->|done| T{counts}
+    T -->|all ok| DONE[COMPLETED]
+    T -->|some failed| PART[PARTIAL]
+    T -->|none ok| FAIL[FAILED]
+    C -.->|GET /jobs/id · poll| CM
 ```
-client ──POST /jobs──▶ main.create_job
-                           │
-                           ▼
-                    service.create_job          validates each recipient,
-                           │                    writes 1 Job + N Certificate rows
-                           ▼
-                    202 + job_id  ◀──────────── response sent here
-                           │
-                           ▼  (BackgroundTasks, same process, after response)
-                    service.process_job
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-     render_certificate()      on exception: mark that
-     write PDF to disk         one cert FAILED, continue
-     mark GENERATED
-              │
-              ▼
-     commit per item ──▶ GET /jobs/{id} shows live counts
-              │
-              ▼
-     job → COMPLETED | PARTIAL | FAILED
+
+**Job lifecycle**
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : POST /jobs, ≥1 valid recipient
+    [*] --> FAILED : POST /jobs, every recipient invalid
+    PENDING --> RUNNING : worker claims job
+    RUNNING --> COMPLETED : all generated
+    RUNNING --> PARTIAL : some failed
+    RUNNING --> FAILED : none generated
+    COMPLETED --> [*]
+    PARTIAL --> [*]
+    FAILED --> [*]
 ```
 
 ---
@@ -244,7 +288,18 @@ SQLite means a reviewer can run this with zero setup. The same code runs on Post
 Pure Python. No system binaries (WeasyPrint needs cairo/pango; wkhtmltopdf is a separate install). `pip install` is the whole setup.
 
 ### Storage on local disk
-`storage/certificates/{job_id}/{certificate_id}.pdf`. Paths are server-generated from UUIDs, never from client input, so there is no path-traversal surface. Moving to S3 is a change to `generator.py` and the download route only.
+`storage/certificates/{job_id}/{certificate_id}.pdf`. Paths are server-generated from UUIDs, never from client input, so there is no path-traversal surface. Moving to S3 is a change to `generator.py` and the download routes only.
+
+### Idempotency-Key
+A bulk job is exactly the kind of request a client retries after a timeout, and a naive retry would generate every certificate twice. The optional `Idempotency-Key` header makes `POST /jobs` safe to repeat: the key is stored on the job with a **UNIQUE constraint**, so even two concurrent requests with the same key cannot both create a job — the database arbitrates, the loser catches `IntegrityError`, rolls back, and returns the winner's job. A replay returns the job's *current* state, not a cached copy of the original response.
+
+Known gap, deliberately left: the same key with a *different* body returns the original job rather than `409`. The fix is to hash the body and store it alongside the key.
+
+### Atomic job claim in the worker
+`process_job` starts with `UPDATE jobs SET status='RUNNING' WHERE id=? AND status='PENDING'` and checks the row count. Only one caller can win that update, so the same job can never be processed twice even if it gets queued twice. This is cheap insurance that also makes a future "re-queue stuck jobs on startup" sweep trivial to add.
+
+### ZIP built in memory
+`GET /jobs/{id}/download` assembles the ZIP in a `BytesIO`. At the 1000-recipient cap and ~2 KB per PDF that is ~2 MB per request — fine. If certificates grew to include images, streaming the ZIP to a temp file would be the change.
 
 ---
 
@@ -268,12 +323,13 @@ Pure Python. No system binaries (WeasyPrint needs cairo/pango; wkhtmltopdf is a 
 - Starlette's `TestClient` runs `BackgroundTasks` before returning the response. That made the tests simple: no polling, assert on final state.
 - Keeping the renderer a pure function that raises made failure isolation trivial to implement and to test.
 - The test suite caught a real design bug: `RecipientIn.completion_date` was typed as `date`, so one recipient with a malformed date made Pydantic reject the entire request with `422` — exactly what two-tier validation is meant to avoid. The loose schema now takes a plain string and the strict per-row schema parses it.
+- Adding idempotency exposed a second race: a request that loses the unique-key race gets handed back a job that might still be `PENDING`, and would queue a second worker for it. The atomic claim in `process_job` closed that, and it was simpler than any locking scheme.
 
 ## Future scope
 
 - Retry endpoint: re-run only the certificates that failed at generation (not validation)
-- `Idempotency-Key` on `POST /jobs` so client retries don't double-generate
-- ZIP download of all certificates in a job
+- Startup sweep: reset jobs stuck in `RUNNING` after a crash back to `PENDING` and re-queue them
+- `409` when an `Idempotency-Key` is reused with a different body
 - Celery/RQ worker, Postgres, S3 — see *Scaling*
 - Authentication and rate limiting
 - Webhook on job completion
