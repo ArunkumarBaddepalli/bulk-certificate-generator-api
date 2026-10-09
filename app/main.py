@@ -4,7 +4,7 @@ import io
 import zipfile
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -86,28 +86,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/jobs", status_code=202, response_model=schemas.JobAccepted, tags=["jobs"])
-def create_job(
-    payload: schemas.JobCreate,
-    background: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    """Submit a bulk certificate request.
-
-    Returns 202 immediately with a job id. Generation runs in the background;
-    poll GET /jobs/{id} for progress.
-    """
-    if len(payload.recipients) > config.MAX_RECIPIENTS_PER_JOB:
-        raise HTTPException(
-            status_code=422,
-            detail=f"too many recipients: maximum {config.MAX_RECIPIENTS_PER_JOB} per job",
-        )
-
-    job = service.create_job(db, payload)
-
-    if job.status != models.JobStatus.FAILED:
-        background.add_task(service.process_job, job.id)
-
+def _accepted_out(job: models.Job) -> dict:
     return {
         "job_id": job.id,
         "status": job.status.value,
@@ -116,6 +95,47 @@ def create_job(
         "rejected": job.failed,
         "status_url": f"/jobs/{job.id}",
     }
+
+
+@app.post("/jobs", status_code=202, response_model=schemas.JobAccepted, tags=["jobs"])
+def create_job(
+    payload: schemas.JobCreate,
+    background: BackgroundTasks,
+    response: Response,
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        max_length=128,
+        description="Optional. Repeating a request with the same key returns the original job.",
+    ),
+):
+    """Submit a bulk certificate request.
+
+    Returns 202 immediately with a job id. Generation runs in the background;
+    poll GET /jobs/{id} for progress.
+
+    Send an `Idempotency-Key` header to make the call safe to retry: the same
+    key returns the same job with 200 instead of creating a duplicate.
+    """
+    if len(payload.recipients) > config.MAX_RECIPIENTS_PER_JOB:
+        raise HTTPException(
+            status_code=422,
+            detail=f"too many recipients: maximum {config.MAX_RECIPIENTS_PER_JOB} per job",
+        )
+
+    if idempotency_key:
+        existing = service.get_job_by_idempotency_key(db, idempotency_key)
+        if existing is not None:
+            response.status_code = 200
+            return _accepted_out(existing)
+
+    job = service.create_job(db, payload, idempotency_key=idempotency_key)
+
+    if job.status == models.JobStatus.PENDING:
+        background.add_task(service.process_job, job.id)
+
+    return _accepted_out(job)
 
 
 @app.get("/jobs/{job_id}", response_model=schemas.JobOut, tags=["jobs"])

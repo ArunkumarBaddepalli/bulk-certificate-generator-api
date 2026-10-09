@@ -8,6 +8,7 @@ certificate and the loop continues.
 import logging
 
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import config, models, schemas
@@ -27,18 +28,31 @@ def _format_validation_error(exc: ValidationError) -> str:
     return "; ".join(parts)[:500]
 
 
-def create_job(db: Session, payload: schemas.JobCreate) -> models.Job:
+def get_job_by_idempotency_key(db: Session, key: str) -> models.Job | None:
+    return db.query(models.Job).filter_by(idempotency_key=key).one_or_none()
+
+
+def create_job(db: Session, payload: schemas.JobCreate, idempotency_key: str | None = None) -> models.Job:
     """Persist the job and one certificate row per recipient.
 
     Recipients failing strict validation (or duplicating an earlier email in
     the same request) are stored immediately as FAILED with the reason. Valid
     ones are stored as PENDING for the background worker.
+
+    If `idempotency_key` is given and a job with that key already exists, the
+    existing job is returned and nothing new is written.
     """
+    if idempotency_key:
+        existing = get_job_by_idempotency_key(db, idempotency_key)
+        if existing is not None:
+            return existing
+
     job = models.Job(
         event_name=payload.event_name,
         issuer=payload.issuer,
         issue_date=payload.issue_date,
         total=len(payload.recipients),
+        idempotency_key=idempotency_key or None,
     )
     db.add(job)
     db.flush()  # assigns job.id
@@ -81,7 +95,17 @@ def create_job(db: Session, payload: schemas.JobCreate) -> models.Job:
         # Nothing to generate; the worker is not scheduled for this job.
         job.status = models.JobStatus.FAILED
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two concurrent requests with the same Idempotency-Key: the UNIQUE
+        # constraint makes the second one lose. Discard ours, return the winner.
+        db.rollback()
+        if idempotency_key:
+            existing = get_job_by_idempotency_key(db, idempotency_key)
+            if existing is not None:
+                return existing
+        raise
     db.refresh(job)
     return job
 
@@ -95,12 +119,19 @@ def process_job(job_id: str) -> None:
     """
     db = SessionLocal()
     try:
-        job = db.get(models.Job, job_id)
-        if job is None or job.status in TERMINAL_STATES:
+        # Atomic claim: only a PENDING job flips to RUNNING, and only one caller
+        # wins. Guards against the same job being queued twice (e.g. a lost
+        # idempotency race) and against re-processing a finished job.
+        claimed = (
+            db.query(models.Job)
+            .filter_by(id=job_id, status=models.JobStatus.PENDING)
+            .update({"status": models.JobStatus.RUNNING}, synchronize_session=False)
+        )
+        db.commit()
+        if not claimed:
             return
 
-        job.status = models.JobStatus.RUNNING
-        db.commit()
+        job = db.get(models.Job, job_id)
 
         pending = (
             db.query(models.Certificate)

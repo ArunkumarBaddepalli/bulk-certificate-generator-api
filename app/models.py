@@ -48,6 +48,10 @@ class Job(Base):
     issuer: Mapped[str] = mapped_column(String(200), nullable=False)
     issue_date: Mapped[date] = mapped_column(Date, nullable=False)
 
+    # Optional client-supplied key. UNIQUE so a retried request cannot create a
+    # second job even under concurrency -- the database arbitrates, not the app.
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
+
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
     total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     succeeded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
