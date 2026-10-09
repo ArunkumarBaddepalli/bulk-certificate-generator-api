@@ -20,10 +20,15 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 # ---------- request ----------
 
 class RecipientIn(BaseModel):
-    """Loose shape accepted at the API boundary. See module docstring."""
+    """Loose shape accepted at the API boundary. See module docstring.
+
+    Every field is an optional plain string on purpose: typing completion_date
+    as `date` here would make Pydantic reject the *whole request* when one
+    recipient has a bad date, which defeats per-recipient validation.
+    """
     name: str | None = None
     email: str | None = None
-    completion_date: date | None = None
+    completion_date: str | None = None
 
 
 class ValidRecipient(BaseModel):
