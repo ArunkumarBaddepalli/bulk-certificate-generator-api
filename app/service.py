@@ -4,6 +4,7 @@ Failure isolation lives here. Every recipient is wrapped in its own try/except a
 both stages (validation, then generation), so one bad row records one FAILED
 certificate and the loop continues.
 """
+
 import logging
 
 from pydantic import ValidationError

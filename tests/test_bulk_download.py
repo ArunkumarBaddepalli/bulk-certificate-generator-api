@@ -1,4 +1,5 @@
 """ZIP download of every generated certificate in a job."""
+
 import io
 import zipfile
 

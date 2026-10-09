@@ -7,9 +7,10 @@ Two tables:
 Per-item rows are what make failure isolation visible to the client: a job can
 be PARTIAL with exactly the failed recipients listed, instead of all-or-nothing.
 """
+
 import enum
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,15 +18,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
 
-class JobStatus(str, enum.Enum):
-    PENDING = "PENDING"      # created, worker not started yet
-    RUNNING = "RUNNING"      # worker processing
+class JobStatus(enum.StrEnum):
+    PENDING = "PENDING"  # created, worker not started yet
+    RUNNING = "RUNNING"  # worker processing
     COMPLETED = "COMPLETED"  # every recipient generated
-    PARTIAL = "PARTIAL"      # some generated, some failed
-    FAILED = "FAILED"        # nothing generated
+    PARTIAL = "PARTIAL"  # some generated, some failed
+    FAILED = "FAILED"  # nothing generated
 
 
-class CertStatus(str, enum.Enum):
+class CertStatus(enum.StrEnum):
     PENDING = "PENDING"
     GENERATED = "GENERATED"
     FAILED = "FAILED"
@@ -36,7 +37,7 @@ def _uuid() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Job(Base):
@@ -66,9 +67,7 @@ class Certificate(Base):
     __tablename__ = "certificates"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
-    job_id: Mapped[str] = mapped_column(
-        ForeignKey("jobs.id", ondelete="CASCADE"), index=True, nullable=False
-    )
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True, nullable=False)
 
     # Stored as provided, so a FAILED row still tells the client which recipient it was.
     recipient_name: Mapped[str | None] = mapped_column(String(120), nullable=True)

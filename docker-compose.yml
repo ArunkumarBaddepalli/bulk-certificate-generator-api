@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - certdata:/data          # SQLite file + generated PDFs survive restarts
+    environment:
+      MAX_RECIPIENTS_PER_JOB: "1000"
+      # To use Postgres instead of SQLite, uncomment the db service below and:
+      # DATABASE_URL: postgresql+psycopg://certs:certs@db:5432/certs
+
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: certs
+  #     POSTGRES_PASSWORD: certs
+  #     POSTGRES_DB: certs
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+volumes:
+  certdata:
+  # pgdata:

@@ -12,12 +12,13 @@ Validation is two-tier:
 So a client sending 500 recipients with 3 bad emails gets 497 certificates and
 a precise list of the 3 problems, instead of a 422 and a forced resubmission.
 """
+
 from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-
 # ---------- request ----------
+
 
 class RecipientIn(BaseModel):
     """Loose shape accepted at the API boundary. See module docstring.
@@ -26,6 +27,7 @@ class RecipientIn(BaseModel):
     as `date` here would make Pydantic reject the *whole request* when one
     recipient has a bad date, which defeats per-recipient validation.
     """
+
     name: str | None = None
     email: str | None = None
     completion_date: str | None = None
@@ -33,6 +35,7 @@ class RecipientIn(BaseModel):
 
 class ValidRecipient(BaseModel):
     """Strict per-row rules, applied in the service layer."""
+
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
     completion_date: date | None = None
@@ -63,12 +66,13 @@ class JobCreate(BaseModel):
 
 # ---------- responses ----------
 
+
 class JobAccepted(BaseModel):
     job_id: str
     status: str
     total: int
-    accepted: int   # passed per-row validation, queued for generation
-    rejected: int   # failed per-row validation, recorded as FAILED
+    accepted: int  # passed per-row validation, queued for generation
+    rejected: int  # failed per-row validation, recorded as FAILED
     status_url: str
 
 

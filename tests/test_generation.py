@@ -1,4 +1,5 @@
 """Certificate generation produces real PDFs."""
+
 from datetime import date
 
 import pytest

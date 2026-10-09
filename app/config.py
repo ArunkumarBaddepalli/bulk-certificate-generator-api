@@ -3,6 +3,7 @@
 Defaults let the app run with zero setup (SQLite file + local folder).
 Override via env for other environments, e.g. DATABASE_URL=postgresql+psycopg://...
 """
+
 import os
 from pathlib import Path
 

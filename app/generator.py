@@ -7,6 +7,7 @@ against that single certificate without affecting the rest of the batch.
 ReportLab: pure Python, no system binaries (unlike WeasyPrint / wkhtmltopdf),
 so `pip install` is the entire setup.
 """
+
 from datetime import date
 from pathlib import Path
 

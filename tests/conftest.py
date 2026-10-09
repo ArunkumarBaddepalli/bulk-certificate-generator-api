@@ -4,6 +4,7 @@ Environment is set *before* importing the app so config picks up:
   - an in-memory SQLite database (StaticPool => shared across threads)
   - a throw-away folder for generated PDFs
 """
+
 import os
 import tempfile
 

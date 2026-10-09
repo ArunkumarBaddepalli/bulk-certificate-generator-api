@@ -3,10 +3,11 @@
 Envelope problems  -> 422, whole request rejected.
 Per-recipient problems -> job accepted, that recipient recorded as FAILED with a reason.
 """
+
 import pytest
 
-
 # ---- envelope: 422 ----
+
 
 @pytest.mark.parametrize("field", ["event_name", "issuer", "issue_date", "recipients"])
 def test_missing_required_field_is_422(client, payload, field):
@@ -39,6 +40,7 @@ def test_too_many_recipients_is_422(client, payload, monkeypatch):
 
 
 # ---- per-recipient: accepted, individually FAILED ----
+
 
 def _failed_items(client, job_id):
     return client.get(f"/jobs/{job_id}/certificates", params={"status": "FAILED"}).json()["items"]

@@ -1,0 +1,14 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+*.db
+storage/
+.env
+.pytest_cache/
+.ruff_cache/
+tests/
+examples/
+.github/
+Makefile
+README.md

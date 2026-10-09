@@ -4,6 +4,7 @@ The validation tests cover failures at submission time. This covers the other
 stage: a recipient that passes validation but blows up while rendering. We
 inject that by patching the renderer to raise for one specific name.
 """
+
 import pytest
 
 

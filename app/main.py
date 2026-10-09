@@ -1,4 +1,5 @@
 """FastAPI application: routes only. Business logic lives in service.py."""
+
 import io
 import zipfile
 from contextlib import asynccontextmanager
@@ -30,6 +31,7 @@ app = FastAPI(
 
 # ---------- serializers ----------
 
+
 def _job_out(job: models.Job) -> dict:
     return {
         "id": job.id,
@@ -59,9 +61,7 @@ def _cert_out(cert: models.Certificate) -> dict:
         "status": cert.status.value,
         "error_message": cert.error_message,
         "download_url": (
-            f"/certificates/{cert.id}/download"
-            if cert.status == models.CertStatus.GENERATED
-            else None
+            f"/certificates/{cert.id}/download" if cert.status == models.CertStatus.GENERATED else None
         ),
     }
 
@@ -79,6 +79,7 @@ def _safe_filename(name: str | None) -> str:
 
 
 # ---------- routes ----------
+
 
 @app.get("/health", tags=["meta"])
 def health():
