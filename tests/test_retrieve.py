@@ -53,3 +53,14 @@ def test_download_returns_pdf(client, payload):
 
 def test_download_unknown_certificate_is_404(client):
     assert client.get("/certificates/nope/download").status_code == 404
+
+
+def test_download_inline_renders_in_browser(client, payload):
+    job_id = client.post("/jobs", json=payload).json()["job_id"]
+    item = client.get(f"/jobs/{job_id}/certificates").json()["items"][0]
+
+    r = client.get(item["download_url"], params={"inline": 1})
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"].startswith("inline")
+    assert r.content[:5] == b"%PDF-"

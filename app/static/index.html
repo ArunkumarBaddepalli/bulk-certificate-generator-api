@@ -4,225 +4,607 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bulk Certificate Generator</title>
-<meta name="description" content="Submit many recipients once; certificates are generated in the background and downloadable individually or as a ZIP.">
+<meta name="description" content="Submit many recipients once; certificates are generated in the background with per-recipient failure isolation, then downloaded individually or as a ZIP.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --fg: #1a1f2b; --muted: #5b6472; --line: #e3e6eb;
-    --accent: #1f3a5f; --accent-fg: #ffffff;
-    --ok: #1f7a3e; --ok-bg: #e4f4ea; --bad: #b42318; --bad-bg: #fbe9e7;
-    --warn: #9a5b00; --warn-bg: #fff3d6; --info: #1d4ed8; --info-bg: #e6edff; --neutral-bg: #eef0f3;
+    --bg: #f4f6fa; --bg-2: #eaeef5; --card: #ffffff; --fg: #141a26; --muted: #5d6675; --line: #e1e6ee; --line-2: #cfd6e1;
+    --accent: #1f3a5f; --accent-2: #2b5a94; --accent-fg: #ffffff; --accent-soft: #e6eef9;
+    --ok: #15803d; --ok-bg: #dcfce7; --bad: #b91c1c; --bad-bg: #fee2e2; --warn: #a16207; --warn-bg: #fef3c7;
+    --info: #1d4ed8; --info-bg: #dbeafe; --neutral: #475569; --neutral-bg: #eef1f5;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.18);
+    --radius: 14px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1218; --card: #171b23; --fg: #e7eaf0; --muted: #9aa3b2; --line: #2a303b;
-      --accent: #7aa2d8; --accent-fg: #0f1218;
-      --ok: #5ed38a; --ok-bg: #12331f; --bad: #ff8a80; --bad-bg: #3a1a17;
-      --warn: #ffc866; --warn-bg: #3a2a0c; --info: #8ab4ff; --info-bg: #15224a; --neutral-bg: #232936;
+      --bg: #0b0f16; --bg-2: #0f141d; --card: #141a24; --fg: #e8ecf3; --muted: #97a1b2; --line: #232b38; --line-2: #2f3947;
+      --accent: #8fb4e8; --accent-2: #6d9bd8; --accent-fg: #0b0f16; --accent-soft: #16233a;
+      --ok: #4ade80; --ok-bg: #0f2a1a; --bad: #f87171; --bad-bg: #3a1515; --warn: #fbbf24; --warn-bg: #3a2a07;
+      --info: #93c5fd; --info-bg: #15264a; --neutral: #a3aebd; --neutral-bg: #1c2431;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 48px; }
-  header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
-  header p { margin: 0 0 22px; color: var(--muted); }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 56px; }
   a { color: var(--accent); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
-  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
-  input, textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; }
-  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--neutral-bg); padding: 1px 6px; border-radius: 5px; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
-  .between { justify-content: space-between; }
-  button, .btn { appearance: none; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; }
-  button:disabled { opacity: .55; cursor: default; }
-  .ghost { background: transparent; color: var(--accent); }
-  .inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
-  .inline input { width: auto; margin: 0; }
-  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
-  .error { color: var(--bad); }
-  .hidden { display: none; }
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+  code { background: var(--neutral-bg); padding: 1px 6px; border-radius: 6px; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 40px 0 26px; }
+  .eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 5px 10px; border-radius: 999px; }
+  .hero h1 { font-size: clamp(28px, 4.2vw, 40px); line-height: 1.12; letter-spacing: -0.02em; margin: 14px 0 10px; font-weight: 800; }
+  .hero p { margin: 0; color: var(--muted); max-width: 640px; font-size: 16px; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .pill { font-size: 12.5px; font-weight: 600; color: var(--muted); border: 1px solid var(--line-2); padding: 4px 10px; border-radius: 999px; background: var(--card); }
+
+  /* ---------- buttons ---------- */
+  .btn { appearance: none; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; font-size: 14px; padding: 10px 16px; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: transform .08s ease, box-shadow .15s ease, background .15s ease; }
+  .btn:hover { background: var(--accent-2); border-color: var(--accent-2); box-shadow: var(--shadow); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .btn.ghost:hover { background: var(--accent-soft); }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  .btn.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
+  .btn.danger:hover { background: var(--bad-bg); }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* ---------- stepper ---------- */
+  .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 22px; }
+  .step { position: relative; padding: 12px 12px 12px 44px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--muted); font-size: 13px; transition: all .25s; }
+  .step b { display: block; color: var(--fg); font-size: 14px; }
+  .step::before { content: attr(data-n); position: absolute; left: 12px; top: 12px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--neutral-bg); color: var(--neutral); }
+  .step.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .step.active::before { background: var(--accent); color: var(--accent-fg); }
+  .step.done::before { content: "✓"; background: var(--ok-bg); color: var(--ok); }
+  @media (max-width: 720px) { .stepper { grid-template-columns: 1fr 1fr; } }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .card h2 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.01em; }
+  .card .sub { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .grid3 { grid-template-columns: 1fr; } }
+  label.f { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .in { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; transition: border-color .15s, box-shadow .15s; }
+  .in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .in.warn { border-color: var(--warn); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .row.between { justify-content: space-between; }
+  .mt { margin-top: 14px; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .err { color: var(--bad); }
+  .hidden { display: none !important; }
+
+  /* ---------- recipient editor ---------- */
+  .editor { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .editor table { width: 100%; border-collapse: collapse; }
+  .editor th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: left; padding: 10px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
+  .editor td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .editor tr:last-child td { border-bottom: 0; }
+  .editor .in { margin: 0; padding: 8px 10px; border-radius: 8px; }
+  .editor .warn-txt { font-size: 11.5px; color: var(--warn); margin-top: 3px; }
+  .editor .x { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
+  .editor .x:hover { background: var(--bad-bg); color: var(--bad); }
+  .editor.drag { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .editor-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; background: var(--bg-2); border-top: 1px solid var(--line); align-items: center; }
+  .editor-foot .count { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+  .tscroll { overflow-x: auto; }
+
+  /* ---------- job panel ---------- */
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .b-PENDING, .b-RUNNING { background: var(--info-bg); color: var(--info); }
+  .b-RUNNING::before { animation: pulse 1s infinite; }
   .b-COMPLETED, .b-GENERATED { background: var(--ok-bg); color: var(--ok); }
   .b-PARTIAL { background: var(--warn-bg); color: var(--warn); }
   .b-FAILED { background: var(--bad-bg); color: var(--bad); }
-  .bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--neutral-bg); margin: 14px 0 8px; }
-  .bar > div { height: 100%; transition: width .3s; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 10px; }
+  @media (max-width: 720px) { .tiles { grid-template-columns: 1fr 1fr; } }
+  .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile .k { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .tile .v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .tile.ok .v { color: var(--ok); } .tile.bad .v { color: var(--bad); }
+  .bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--neutral-bg); }
+  .bar > div { height: 100%; transition: width .35s ease; }
   #bar-ok { background: var(--ok); } #bar-fail { background: var(--bad); }
-  .counts { display: flex; gap: 18px; color: var(--muted); font-size: 13px; }
-  .counts b { color: var(--fg); }
-  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  td.err { color: var(--bad); font-size: 13px; }
-  footer { color: var(--muted); font-size: 13px; margin-top: 10px; }
-  .replay { font-size: 13px; color: var(--muted); }
+  .idtxt { display: inline-flex; align-items: center; gap: 8px; }
+  .copy { border: 1px solid var(--line-2); background: var(--card); color: var(--muted); border-radius: 7px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+  .copy:hover { color: var(--fg); }
+  .results { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .results th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px; border-bottom: 1px solid var(--line); }
+  .results td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .results tr { transition: background .5s; }
+  .results tr.flash { background: var(--ok-bg); }
+  .results tr.flash-bad { background: var(--bad-bg); }
+  .results .err { font-size: 13px; }
+  .results .acts { display: flex; gap: 6px; white-space: nowrap; }
+  .replay-out { font-size: 13px; color: var(--muted); }
+  .replay-out b { color: var(--fg); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; }
+  .chip { border: 1px solid var(--line-2); background: var(--card); color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .pager { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--muted); }
+  .pager button { border: 1px solid var(--line-2); background: var(--card); color: var(--fg); border-radius: 8px; padding: 4px 10px; font: inherit; cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+
+  /* ---------- preview ---------- */
+  .preview { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-2); }
+  .preview-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .preview iframe { width: 100%; height: 520px; border: 0; background: #fff; display: block; }
+  @media (max-width: 720px) { .preview iframe { height: 320px; } }
+
+  /* ---------- dev view ---------- */
+  details.dev { margin-bottom: 18px; }
+  details.dev summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); font-weight: 600; box-shadow: var(--shadow); }
+  details.dev summary::-webkit-details-marker { display: none; }
+  details.dev[open] summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .dev-body { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); background: var(--card); padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 820px) { .dev-body { grid-template-columns: 1fr; } }
+  .dev-body h3 { margin: 0 0 6px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  pre { margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 12.5px; line-height: 1.5; overflow: auto; max-height: 260px; font-family: "JetBrains Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+  .log { grid-column: 1 / -1; }
+  .log pre { max-height: 180px; }
+  .log .ok { color: var(--ok); } .log .bad { color: var(--bad); } .log .dim { color: var(--muted); }
+
+  /* ---------- recent + how ---------- */
+  .twocol { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; }
+  @media (max-width: 820px) { .twocol { grid-template-columns: 1fr; } }
+  .recent { list-style: none; margin: 0; padding: 0; }
+  .recent li { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .recent li:last-child { border-bottom: 0; }
+  .recent button { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+  .recent .when { color: var(--muted); font-size: 12px; }
+  .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .how { grid-template-columns: 1fr; } }
+  .how .h { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .how .h b { display: block; margin-bottom: 4px; font-size: 14.5px; }
+  .how .h p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .how .h .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 10px; font-weight: 800; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 24px; text-align: center; }
+
+  /* ---------- toast ---------- */
+  .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast { background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: var(--shadow); animation: up .2s ease; max-width: 320px; }
+  @keyframes up { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
+  kbd { font: 11px "JetBrains Mono", monospace; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Bulk Certificate Generator</h1>
-    <p>Submit many recipients once &rarr; PDFs are generated in the background &rarr; poll progress &rarr; download one by one or as a ZIP.
-       &nbsp;<a href="/docs">API docs</a> &middot; <a href="https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api">Source</a></p>
-  </header>
 
-  <section class="card" id="form-card">
-    <div class="grid">
-      <label>Event name <input id="event_name" value="Python Backend Bootcamp 2026"></label>
-      <label>Issuer <input id="issuer" value="Aereo Academy"></label>
-      <label>Issue date <input id="issue_date" type="date"></label>
+  <section class="hero">
+    <span class="eyebrow">Take-home · Aereo SDE Intern</span>
+    <h1>Bulk Certificate Generator</h1>
+    <p>One request, many recipients. The API validates each row, generates PDF certificates in the background with per-recipient failure isolation, and lets you poll progress and download — one at a time or as a ZIP.</p>
+    <div class="hero-actions">
+      <a class="btn" href="#compose">Try it live</a>
+      <a class="btn ghost" href="/docs">API docs (Swagger)</a>
+      <a class="btn ghost" href="https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api" target="_blank" rel="noopener">Source on GitHub</a>
     </div>
-    <label style="margin-top:14px">Recipients &mdash; one per line: <code>Name, email, completion date (optional)</code>
-      <textarea id="recipients" rows="8" spellcheck="false"></textarea>
-    </label>
-    <div class="row">
-      <button id="submit">Generate certificates</button>
-      <button class="ghost" id="sample" type="button">Load sample (3 good + 3 bad rows)</button>
-      <label class="inline"><input type="checkbox" id="idem" checked> Send <code>Idempotency-Key</code></label>
+    <div class="pills">
+      <span class="pill">FastAPI</span><span class="pill">SQLAlchemy</span><span class="pill">ReportLab</span><span class="pill">Background jobs</span><span class="pill">Idempotency-Key</span><span class="pill">pytest · CI green</span>
     </div>
-    <p class="hint error" id="form-error"></p>
   </section>
 
-  <section class="card hidden" id="job-card">
-    <div class="row between" style="margin-top:0">
-      <div><strong>Job</strong> <code id="job-id"></code></div>
-      <span class="badge" id="job-status">PENDING</span>
+  <div class="stepper" id="stepper">
+    <div class="step active" data-n="1"><b>Compose</b>Add recipients</div>
+    <div class="step" data-n="2"><b>Submit</b>POST /jobs → 202</div>
+    <div class="step" data-n="3"><b>Generate</b>Background worker</div>
+    <div class="step" data-n="4"><b>Download</b>PDF or ZIP</div>
+  </div>
+
+  <section class="card" id="compose">
+    <h2>Compose a batch</h2>
+    <p class="sub">Rows that fail validation are still accepted — they come back as <code>FAILED</code> with the reason, and the valid ones proceed. Try the sample: 3 good rows, 3 bad.</p>
+    <div class="grid3">
+      <label class="f">Event name <input class="in" id="event_name" value="Python Backend Bootcamp 2026"></label>
+      <label class="f">Issuer <input class="in" id="issuer" value="Aereo Academy"></label>
+      <label class="f">Issue date <input class="in" id="issue_date" type="date"></label>
+    </div>
+
+    <div class="editor mt">
+      <div class="tscroll">
+        <table>
+          <thead><tr><th style="width:34%">Name</th><th style="width:38%">Email</th><th>Completion date <span class="hint">(optional)</span></th><th style="width:40px"></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="editor-foot">
+        <button class="btn ghost sm" id="add-row" type="button">+ Add row</button>
+        <button class="btn ghost sm" id="import-csv" type="button" title="Columns: name, email, completion_date (optional). Header row optional. Or drag a .csv onto the table.">Import CSV</button>
+        <input type="file" id="csv-file" accept=".csv,text/csv,text/plain" hidden>
+        <button class="btn ghost sm" id="load-sample" type="button">Load sample</button>
+        <button class="btn ghost sm" id="load-50" type="button">Generate 50 random</button>
+        <button class="btn danger sm" id="clear" type="button">Clear</button>
+        <span class="count" id="row-count">0 recipients</span>
+      </div>
+    </div>
+    <p class="hint" style="margin:8px 0 0">Have a spreadsheet? Export it as CSV (<code>name, email, completion_date</code>) and import or drag it onto the table. Parsing happens in the browser — the API only ever receives JSON.</p>
+
+    <div class="row mt between">
+      <div class="row">
+        <button class="btn" id="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          Generate certificates
+        </button>
+        <span class="hint">Every request carries an <code>Idempotency-Key</code> — safe to retry.</span>
+      </div>
+      <span class="hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to submit</span>
+    </div>
+    <p class="hint err mt hidden" id="form-error"></p>
+  </section>
+
+  <section class="card hidden" id="job">
+    <div class="row between">
+      <div>
+        <h2 style="margin:0">Job</h2>
+        <div class="idtxt"><code class="mono" id="job-id"></code><button class="copy" id="copy-id" type="button">copy</button></div>
+      </div>
+      <span class="badge b-PENDING" id="job-status">PENDING</span>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="k">Total</div><div class="v" id="t-total">0</div></div>
+      <div class="tile ok"><div class="k">Generated</div><div class="v" id="t-ok">0</div></div>
+      <div class="tile bad"><div class="k">Failed</div><div class="v" id="t-fail">0</div></div>
+      <div class="tile"><div class="k">Elapsed</div><div class="v" id="t-time">0.0s</div></div>
     </div>
     <div class="bar"><div id="bar-ok" style="width:0"></div><div id="bar-fail" style="width:0"></div></div>
-    <div class="counts">
-      <span>Generated <b id="c-ok">0</b></span>
-      <span>Failed <b id="c-fail">0</b></span>
-      <span>Total <b id="c-total">0</b></span>
-    </div>
-    <div class="row">
-      <a class="btn" id="zip" href="#">Download all (ZIP)</a>
+
+    <div class="row mt">
+      <a class="btn" id="zip" href="#" style="visibility:hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        Download all (ZIP)
+      </a>
       <a class="btn ghost" id="json" href="#" target="_blank" rel="noopener">Job JSON</a>
-      <button class="ghost" id="replay" type="button" title="Re-sends the exact same request with the same Idempotency-Key">Resend same request</button>
-      <span class="replay" id="replay-out"></span>
+      <button class="btn ghost" id="replay" type="button" title="Re-sends the identical request with the same Idempotency-Key">Resend same request</button>
+      <span class="replay-out" id="replay-out"></span>
     </div>
-    <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Result</th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
+
+    <div class="filters">
+      <button class="chip on" data-f="" type="button">All</button>
+      <button class="chip" data-f="GENERATED" type="button">Generated</button>
+      <button class="chip" data-f="FAILED" type="button">Failed</button>
+      <button class="chip" data-f="PENDING" type="button">Pending</button>
+      <div class="pager">
+        <span id="pager-txt">—</span>
+        <button id="pg-prev" type="button">‹</button>
+        <button id="pg-next" type="button">›</button>
+      </div>
+    </div>
+    <div class="tscroll">
+      <table class="results">
+        <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Status</th><th>Result</th><th></th></tr></thead>
+        <tbody id="result-rows"></tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin:8px 0 0">Table is driven by <code>GET /jobs/{id}/certificates?status=&amp;limit=25&amp;offset=</code> — the same pagination the API exposes.</p>
+
+    <div class="preview hidden" id="preview">
+      <div class="preview-head"><span id="preview-title">Preview</span><button class="copy" id="preview-close" type="button">close</button></div>
+      <iframe id="preview-frame" title="Certificate preview"></iframe>
+    </div>
   </section>
 
-  <footer>FastAPI &middot; SQLAlchemy &middot; ReportLab &middot; background generation with per-recipient failure isolation.
-    Free-tier hosting: first request after idle may take ~40&nbsp;s.</footer>
+  <details class="dev" id="dev">
+    <summary>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 4l-4 16"/></svg>
+      Developer view — request, response, and every poll
+    </summary>
+    <div class="dev-body">
+      <div><h3>Request</h3><pre id="dev-req" class="mono">—</pre></div>
+      <div><h3>Response</h3><pre id="dev-res" class="mono">—</pre></div>
+      <div class="log"><h3>Log</h3><pre id="dev-log" class="mono">—</pre></div>
+    </div>
+  </details>
+
+  <div class="twocol">
+    <section class="card">
+      <h2>How it works</h2>
+      <p class="sub">The three decisions the backend is built around.</p>
+      <div class="how">
+        <div class="h"><div class="ic">202</div><b>Accept now, generate later</b><p><code>POST /jobs</code> returns a job id immediately. Generation runs after the response via <code>BackgroundTasks</code>; the client polls <code>GET /jobs/{id}</code>.</p></div>
+        <div class="h"><div class="ic">1:1</div><b>Per-recipient isolation</b><p>Each row is validated and rendered in its own <code>try/except</code>. One bad email or one renderer crash marks one row <code>FAILED</code> — the rest finish.</p></div>
+        <div class="h"><div class="ic">=</div><b>Safe to retry</b><p>An <code>Idempotency-Key</code> is stored with a UNIQUE constraint. The same key returns the same job with <code>200</code>, even under concurrent requests.</p></div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Recent jobs</h2>
+      <p class="sub">From this browser. Click to reopen.</p>
+      <ul class="recent" id="recent"><li class="hint">None yet.</li></ul>
+    </section>
+  </div>
+
+  <footer>Free-tier hosting: the first request after idle may take ~40 s to wake. Data resets on redeploy.</footer>
 </div>
+<div class="toasts" id="toasts"></div>
 
 <script>
 (() => {
+  "use strict";
   const $ = (s) => document.querySelector(s);
+  const el = (tag, props = {}, ...kids) => { const n = document.createElement(tag); Object.assign(n, props); for (const k of kids) n.append(k); return n; };
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const SAMPLE = [
-    "Arun Kumar, arun@example.com",
-    "Priya Sharma, priya@example.com, 2026-10-01",
-    "Rahul Verma, rahul@example.com",
-    ", blank-name@example.com",
-    "Bad Email, not-an-email",
-    "Arun Again, ARUN@example.com",
-  ].join("\n");
+    ["Arun Kumar", "arun@example.com", ""],
+    ["Priya Sharma", "priya@example.com", "2026-10-01"],
+    ["Rahul Verma", "rahul@example.com", ""],
+    ["", "blank-name@example.com", ""],
+    ["Bad Email", "not-an-email", ""],
+    ["Arun Again", "ARUN@example.com", ""],
+  ];
+  const FIRST = ["Aarav","Ananya","Vihaan","Diya","Arjun","Isha","Kabir","Meera","Rohan","Sara","Dev","Nisha","Yash","Tara","Ishaan","Kiara"];
+  const LAST = ["Sharma","Verma","Iyer","Reddy","Patel","Nair","Singh","Khan","Das","Mehta","Rao","Joshi"];
 
-  let lastRequest = null; // { body, headers } for the replay button
-  let pollTimer = null;
+  const state = { jobId: null, lastRequest: null, pollTimer: null, elapsedTimer: null, startedAt: 0, prevStatus: {}, filter: "", page: 0, pageSize: 25 };
 
-  $("#issue_date").value = new Date().toISOString().slice(0, 10);
-  $("#recipients").value = SAMPLE;
-  $("#sample").addEventListener("click", () => { $("#recipients").value = SAMPLE; });
+  // ---------- toast ----------
+  function toast(msg, ms = 3200) { const t = el("div", { className: "toast", textContent: msg }); $("#toasts").append(t); setTimeout(() => t.remove(), ms); }
 
-  function parseRecipients(text) {
-    return text.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
-      const [name = "", email = "", completion_date = ""] = line.split(",").map(s => s.trim());
-      const r = { name, email };
-      if (completion_date) r.completion_date = completion_date;
+  // ---------- stepper ----------
+  function setStep(n) {
+    document.querySelectorAll(".step").forEach((s, i) => { s.classList.toggle("done", i + 1 < n); s.classList.toggle("active", i + 1 === n); });
+  }
+
+  // ---------- recipient editor ----------
+  function addRow(name = "", email = "", date = "") {
+    const tr = el("tr");
+    const mk = (val, ph, type = "text") => el("input", { className: "in", value: val, placeholder: ph, type });
+    const iN = mk(name, "Full name"), iE = mk(email, "name@example.com", "email"), iD = mk(date, "", "date");
+    const wN = el("div", { className: "warn-txt" }), wE = el("div", { className: "warn-txt" });
+    const check = () => {
+      const n = iN.value.trim(), e = iE.value.trim();
+      iN.classList.toggle("warn", !n); wN.textContent = n ? "" : "blank → server will mark FAILED";
+      const bad = e && !EMAIL_RE.test(e);
+      iE.classList.toggle("warn", bad || !e); wE.textContent = !e ? "required" : bad ? "invalid → server will mark FAILED" : "";
+    };
+    iN.addEventListener("input", check); iE.addEventListener("input", check); check();
+    const x = el("button", { className: "x", type: "button", textContent: "×", title: "Remove" });
+    x.addEventListener("click", () => { tr.remove(); updateCount(); });
+    tr.append(el("td", {}, iN, wN), el("td", {}, iE, wE), el("td", {}, iD), el("td", {}, x));
+    $("#rows").append(tr); updateCount();
+  }
+  function readRows() {
+    return [...$("#rows").querySelectorAll("tr")].map(tr => {
+      const [n, e, d] = tr.querySelectorAll("input");
+      const r = { name: n.value.trim(), email: e.value.trim() };
+      if (d.value) r.completion_date = d.value;
       return r;
     });
   }
-
-  function badge(el, status) { el.textContent = status; el.className = "badge b-" + status; }
-
-  function renderRows(items) {
-    const tb = $("#rows"); tb.textContent = "";
-    for (const c of items) {
-      const tr = document.createElement("tr");
-      const td = (txt, cls) => { const d = document.createElement("td"); d.textContent = txt ?? ""; if (cls) d.className = cls; tr.appendChild(d); return d; };
-      td(c.recipient_name || "—");
-      td(c.recipient_email || "—");
-      const s = td(""); const b = document.createElement("span"); badge(b, c.status); s.appendChild(b);
-      if (c.status === "GENERATED") {
-        const d = document.createElement("td"); const a = document.createElement("a");
-        a.href = c.download_url; a.textContent = "Download PDF"; d.appendChild(a); tr.appendChild(d);
-      } else {
-        td(c.error_message || (c.status === "PENDING" ? "queued" : ""), c.status === "FAILED" ? "err" : "");
-      }
-      tb.appendChild(tr);
+  function clearRows() { $("#rows").textContent = ""; updateCount(); }
+  function updateCount() { const n = $("#rows").children.length; $("#row-count").textContent = `${n} recipient${n === 1 ? "" : "s"}`; }
+  function loadSample() { clearRows(); SAMPLE.forEach(r => addRow(...r)); toast("Sample loaded — 3 valid, 3 deliberately bad"); }
+  function load50() {
+    clearRows();
+    const seen = new Set();
+    for (let i = 0; i < 50; i++) {
+      const f = FIRST[Math.floor(Math.random() * FIRST.length)], l = LAST[Math.floor(Math.random() * LAST.length)];
+      let e = `${f}.${l}${i}@example.com`.toLowerCase(); if (seen.has(e)) e = `${i}.${e}`; seen.add(e);
+      addRow(`${f} ${l}`, e, "");
     }
+    toast("50 random recipients — watch the progress bar");
   }
+
+  // ---------- CSV import (client-side; API stays JSON-only) ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], field = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(field); rows.push(row); row = []; field = ""; }
+      else field += ch;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.map(r => r.map(c => c.trim())).filter(r => r.some(Boolean));
+  }
+  function importCSV(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let rows = parseCSV(String(reader.result));
+      if (!rows.length) { toast("No rows found in " + file.name); return; }
+      // Header row? Map columns by name; otherwise assume name, email, completion_date by position.
+      let iN = 0, iE = 1, iD = 2;
+      const head = rows[0].map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
+      if (head.some(h => h.includes("email"))) {
+        iE = head.findIndex(h => h.includes("email"));
+        iN = head.findIndex(h => h.includes("name") && !h.includes("event"));
+        iD = head.findIndex(h => h.includes("date"));
+        if (iN < 0) iN = iE === 0 ? 1 : 0;
+        rows = rows.slice(1);
+      }
+      let n = 0;
+      for (const r of rows) { addRow(r[iN] ?? "", r[iE] ?? "", iD >= 0 ? (r[iD] ?? "") : ""); n++; }
+      toast(`Imported ${n} row${n === 1 ? "" : "s"} from ${file.name}`);
+      log(`CSV import: ${n} rows from ${file.name} (parsed in browser)`, "dim");
+    };
+    reader.readAsText(file);
+  }
+  $("#import-csv").addEventListener("click", () => $("#csv-file").click());
+  $("#csv-file").addEventListener("change", (e) => { importCSV(e.target.files[0]); e.target.value = ""; });
+  const editor = document.querySelector(".editor");
+  ["dragenter", "dragover"].forEach(ev => editor.addEventListener(ev, (e) => { e.preventDefault(); editor.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach(ev => editor.addEventListener(ev, (e) => { e.preventDefault(); editor.classList.remove("drag"); }));
+  editor.addEventListener("drop", (e) => importCSV(e.dataTransfer.files[0]));
+
+  // ---------- dev view ----------
+  const logLines = [];
+  function log(line, cls = "") {
+    const t = new Date().toLocaleTimeString([], { hour12: false }) + "." + String(Date.now() % 1000).padStart(3, "0");
+    logLines.push({ t, line, cls }); if (logLines.length > 60) logLines.shift();
+    const pre = $("#dev-log"); pre.textContent = "";
+    for (const L of logLines) { pre.append(el("span", { className: "dim", textContent: L.t + "  " }), el("span", { className: L.cls, textContent: L.line + "\n" })); }
+    pre.scrollTop = pre.scrollHeight;
+  }
+  const pretty = (o) => JSON.stringify(o, null, 2);
+
+  // ---------- job panel ----------
+  function badge(node, status) { node.textContent = status; node.className = "badge b-" + status; }
+  function renderResults(items, offset) {
+    const tb = $("#result-rows"); tb.textContent = "";
+    items.forEach((c, k) => {
+      const i = offset + k;
+      const tr = el("tr");
+      const prev = state.prevStatus[c.id];
+      if (prev && prev !== c.status) tr.classList.add(c.status === "GENERATED" ? "flash" : "flash-bad");
+      state.prevStatus[c.id] = c.status;
+      const b = el("span"); badge(b, c.status);
+      const result = c.status === "GENERATED" ? el("span", { className: "hint", textContent: "PDF ready" })
+                   : c.status === "FAILED" ? el("span", { className: "err", textContent: c.error_message || "failed" })
+                   : el("span", { className: "hint", textContent: "queued…" });
+      const acts = el("div", { className: "acts" });
+      if (c.status === "GENERATED") {
+        const pv = el("button", { className: "btn ghost sm", type: "button", textContent: "Preview" });
+        pv.addEventListener("click", () => showPreview(c));
+        acts.append(pv, el("a", { className: "btn ghost sm", href: c.download_url, textContent: "Download" }));
+      }
+      tr.append(el("td", { className: "hint", textContent: i + 1 }), el("td", { textContent: c.recipient_name || "—" }),
+                el("td", { className: "mono", textContent: c.recipient_email || "—" }), el("td", {}, b), el("td", {}, result), el("td", {}, acts));
+      tb.append(tr);
+    });
+  }
+  function showPreview(c) {
+    $("#preview-title").textContent = `Preview — ${c.recipient_name}`;
+    $("#preview-frame").src = `${c.download_url}?inline=1`;
+    $("#preview").classList.remove("hidden");
+    $("#preview").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  $("#preview-close").addEventListener("click", () => { $("#preview").classList.add("hidden"); $("#preview-frame").src = "about:blank"; });
 
   async function refresh(jobId) {
-    const job = await (await fetch(`/jobs/${jobId}`)).json();
+    const r = await fetch(`/jobs/${jobId}`); const job = await r.json();
     const p = job.progress;
+    log(`GET /jobs/${jobId.slice(0, 8)}… → ${job.status} ${p.processed}/${p.total}`, job.status === "FAILED" ? "bad" : "");
     badge($("#job-status"), job.status);
-    $("#c-ok").textContent = p.succeeded; $("#c-fail").textContent = p.failed; $("#c-total").textContent = p.total;
+    $("#t-total").textContent = p.total; $("#t-ok").textContent = p.succeeded; $("#t-fail").textContent = p.failed;
     $("#bar-ok").style.width = (100 * p.succeeded / p.total) + "%";
     $("#bar-fail").style.width = (100 * p.failed / p.total) + "%";
-    const certs = await (await fetch(`/jobs/${jobId}/certificates?limit=1000`)).json();
-    renderRows(certs.items);
+    await loadPage(jobId);
     const terminal = ["COMPLETED", "PARTIAL", "FAILED"].includes(job.status);
+    setStep(terminal ? 4 : job.status === "RUNNING" ? 3 : 2);
     $("#zip").style.visibility = (terminal && p.succeeded > 0) ? "visible" : "hidden";
+    if (terminal) {
+      clearInterval(state.elapsedTimer);
+      saveRecent({ id: jobId, event: job.event_name, status: job.status, at: Date.now() });
+      toast(`${job.status}: ${p.succeeded} generated, ${p.failed} failed${p.succeeded ? " — ZIP ready" : ""}`);
+    }
     return terminal;
   }
+  async function loadPage(jobId) {
+    const q = new URLSearchParams({ limit: state.pageSize, offset: state.page * state.pageSize });
+    if (state.filter) q.set("status", state.filter);
+    const certs = await (await fetch(`/jobs/${jobId}/certificates?${q}`)).json();
+    const lastPage = Math.max(0, Math.ceil(certs.total / state.pageSize) - 1);
+    if (state.page > lastPage) { state.page = lastPage; return loadPage(jobId); }
+    renderResults(certs.items, certs.offset);
+    const from = certs.total ? certs.offset + 1 : 0, to = certs.offset + certs.items.length;
+    $("#pager-txt").textContent = `${from}–${to} of ${certs.total}`;
+    $("#pg-prev").disabled = state.page === 0; $("#pg-next").disabled = to >= certs.total;
+  }
+  document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => {
+    document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c === ch));
+    state.filter = ch.dataset.f; state.page = 0;
+    if (state.jobId) loadPage(state.jobId);
+  }));
+  $("#pg-prev").addEventListener("click", () => { if (state.page > 0) { state.page--; loadPage(state.jobId); } });
+  $("#pg-next").addEventListener("click", () => { state.page++; loadPage(state.jobId); });
 
   function startPolling(jobId) {
-    clearInterval(pollTimer);
-    const tick = async () => { if (await refresh(jobId)) clearInterval(pollTimer); };
-    tick(); pollTimer = setInterval(tick, 1500);
+    clearInterval(state.pollTimer); clearInterval(state.elapsedTimer);
+    state.startedAt = performance.now(); state.prevStatus = {}; state.page = 0;
+    state.elapsedTimer = setInterval(() => { $("#t-time").textContent = ((performance.now() - state.startedAt) / 1000).toFixed(1) + "s"; }, 100);
+    const tick = async () => { try { if (await refresh(jobId)) clearInterval(state.pollTimer); } catch (e) { log("poll error: " + e.message, "bad"); } };
+    tick(); state.pollTimer = setInterval(tick, 1200);
+  }
+  function openJob(jobId) {
+    state.jobId = jobId;
+    $("#job").classList.remove("hidden");
+    $("#job-id").textContent = jobId;
+    $("#zip").href = `/jobs/${jobId}/download`; $("#json").href = `/jobs/${jobId}`;
+    $("#preview").classList.add("hidden"); $("#replay-out").textContent = "";
+    startPolling(jobId);
+    $("#job").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // ---------- submit / replay ----------
   async function post(req) {
-    return fetch("/jobs", { method: "POST", headers: { "Content-Type": "application/json", ...req.headers }, body: req.body });
+    const t0 = performance.now();
+    const r = await fetch("/jobs", { method: "POST", headers: { "Content-Type": "application/json", ...req.headers }, body: req.body });
+    const data = await r.json().catch(() => ({}));
+    return { r, data, ms: Math.round(performance.now() - t0) };
+  }
+  async function submit() {
+    $("#form-error").classList.add("hidden");
+    const recipients = readRows();
+    if (!recipients.length) { $("#form-error").textContent = "Add at least one recipient."; $("#form-error").classList.remove("hidden"); return; }
+    const payload = { event_name: $("#event_name").value.trim(), issuer: $("#issuer").value.trim(), issue_date: $("#issue_date").value, recipients };
+    const headers = { "Idempotency-Key": "ui-" + crypto.randomUUID() };
+    state.lastRequest = { body: JSON.stringify(payload), headers };
+    $("#dev-req").textContent = `POST /jobs\n${Object.entries({ "Content-Type": "application/json", ...headers }).map(([k, v]) => `${k}: ${v}`).join("\n")}\n\n${pretty(payload)}`;
+    $("#submit").disabled = true; setStep(2);
+    try {
+      const { r, data, ms } = await post(state.lastRequest);
+      $("#dev-res").textContent = `HTTP ${r.status} (${ms} ms)\n\n${pretty(data)}`;
+      log(`POST /jobs → ${r.status} in ${ms} ms`, r.ok ? "ok" : "bad");
+      if (!r.ok) { $("#form-error").textContent = typeof data.detail === "string" ? data.detail : pretty(data.detail); $("#form-error").classList.remove("hidden"); setStep(1); return; }
+      toast(`Accepted: ${data.accepted} queued, ${data.rejected} rejected at validation`);
+      openJob(data.job_id);
+    } catch (e) {
+      $("#form-error").textContent = "Request failed: " + e.message; $("#form-error").classList.remove("hidden"); setStep(1);
+    } finally { $("#submit").disabled = false; }
+  }
+  async function replay() {
+    if (!state.lastRequest) return;
+    const { r, data, ms } = await post(state.lastRequest);
+    const same = data.job_id === state.jobId;
+    $("#replay-out").textContent = ""; $("#replay-out").append(el("b", { textContent: `HTTP ${r.status}` }), ` in ${ms} ms — ${same ? "same job returned, nothing regenerated" : "unexpected: a different job came back"}`);
+    $("#dev-res").textContent = `HTTP ${r.status} (${ms} ms) — replay\n\n${pretty(data)}`;
+    log(`POST /jobs (replay, same Idempotency-Key) → ${r.status}, job ${same ? "unchanged" : "NEW"}`, same ? "ok" : "bad");
+    toast(same ? `Idempotent: ${r.status}, same job id` : "Unexpected: new job created");
   }
 
-  $("#submit").addEventListener("click", async () => {
-    $("#form-error").textContent = "";
-    const recipients = parseRecipients($("#recipients").value);
-    if (!recipients.length) { $("#form-error").textContent = "Add at least one recipient."; return; }
-    const payload = {
-      event_name: $("#event_name").value.trim(), issuer: $("#issuer").value.trim(),
-      issue_date: $("#issue_date").value, recipients,
-    };
-    const headers = {};
-    if ($("#idem").checked) headers["Idempotency-Key"] = "ui-" + crypto.randomUUID();
-    lastRequest = { body: JSON.stringify(payload), headers };
-
-    $("#submit").disabled = true;
-    try {
-      const r = await post(lastRequest);
-      const data = await r.json();
-      if (!r.ok) { $("#form-error").textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail); return; }
-      $("#job-card").classList.remove("hidden");
-      $("#job-id").textContent = data.job_id;
-      $("#zip").href = `/jobs/${data.job_id}/download`;
-      $("#json").href = `/jobs/${data.job_id}`;
-      $("#replay-out").textContent = "";
-      $("#replay").disabled = !headers["Idempotency-Key"];
-      startPolling(data.job_id);
-      $("#job-card").scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (e) {
-      $("#form-error").textContent = "Request failed: " + e.message;
-    } finally {
-      $("#submit").disabled = false;
+  // ---------- recent ----------
+  const RKEY = "certgen.recent";
+  function loadRecent() { try { return JSON.parse(localStorage.getItem(RKEY) || "[]"); } catch { return []; } }
+  function saveRecent(entry) {
+    try { const list = loadRecent().filter(x => x.id !== entry.id); list.unshift(entry); localStorage.setItem(RKEY, JSON.stringify(list.slice(0, 8))); } catch {}
+    renderRecent();
+  }
+  function renderRecent() {
+    const ul = $("#recent"); ul.textContent = "";
+    const list = loadRecent();
+    if (!list.length) { ul.append(el("li", { className: "hint", textContent: "None yet." })); return; }
+    for (const j of list) {
+      const b = el("button", { type: "button", textContent: j.event || j.id.slice(0, 8) }); b.addEventListener("click", () => openJob(j.id));
+      const st = el("span"); badge(st, j.status);
+      ul.append(el("li", {}, el("div", {}, b, el("div", { className: "when mono", textContent: j.id.slice(0, 12) + "… · " + new Date(j.at).toLocaleString() })), st));
     }
-  });
+  }
 
-  $("#replay").addEventListener("click", async () => {
-    if (!lastRequest) return;
-    const r = await post(lastRequest);
-    const data = await r.json();
-    $("#replay-out").textContent = `HTTP ${r.status} — same job ${data.job_id === $("#job-id").textContent ? "returned, nothing regenerated" : "NOT returned"}`;
-  });
+  // ---------- wire up ----------
+  $("#issue_date").value = new Date().toISOString().slice(0, 10);
+  $("#add-row").addEventListener("click", () => addRow());
+  $("#load-sample").addEventListener("click", loadSample);
+  $("#load-50").addEventListener("click", load50);
+  $("#clear").addEventListener("click", clearRows);
+  $("#submit").addEventListener("click", submit);
+  $("#replay").addEventListener("click", replay);
+  $("#copy-id").addEventListener("click", async () => { try { await navigator.clipboard.writeText(state.jobId); toast("Job id copied"); } catch { toast("Copy failed"); } });
+  document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); });
+  SAMPLE.forEach(r => addRow(...r));
+  renderRecent();
+  log("ready — compose a batch and submit", "dim");
 })();
 </script>
 </body>

@@ -182,8 +182,12 @@ def list_certificates(
 
 
 @app.get("/certificates/{cert_id}/download", tags=["certificates"])
-def download_certificate(cert_id: str, db: Session = Depends(get_db)):
-    """Download one generated certificate as PDF."""
+def download_certificate(
+    cert_id: str,
+    inline: bool = Query(default=False, description="Render in the browser instead of downloading"),
+    db: Session = Depends(get_db),
+):
+    """Download one generated certificate as PDF (or preview it with ?inline=1)."""
     cert = db.get(models.Certificate, cert_id)
     if cert is None:
         raise HTTPException(status_code=404, detail="certificate not found")
@@ -197,6 +201,7 @@ def download_certificate(cert_id: str, db: Session = Depends(get_db)):
         cert.file_path,
         media_type="application/pdf",
         filename=f"certificate_{_safe_filename(cert.recipient_name)}.pdf",
+        content_disposition_type="inline" if inline else "attachment",
     )
 
 
