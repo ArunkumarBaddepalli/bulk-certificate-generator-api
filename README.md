@@ -1,8 +1,12 @@
 # Bulk Certificate Generator API
 
 [![CI](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live_demo-open_the_app-1f3a5f?style=for-the-badge&logo=render&logoColor=white)](https://bulk-certificate-generator-api-4slj.onrender.com)
+[![API docs](https://img.shields.io/badge/API_docs-Swagger-2b5a94?style=for-the-badge&logo=swagger&logoColor=white)](https://bulk-certificate-generator-api-4slj.onrender.com/docs)
 
-**Live demo:** https://bulk-certificate-generator-api-4slj.onrender.com — web client at `/`, Swagger at `/docs`. Try it without cloning.
+### 🔗 Live demo → **https://bulk-certificate-generator-api-4slj.onrender.com**
+
+Web client at `/`, Swagger at `/docs`. Try it without cloning — load the sample, hit *Generate certificates*, preview a PDF, resend to see the idempotent `200`.
 *(Free tier: first request after idle takes ~40 s to wake; data resets on restart.)*
 
 Submit a list of recipients once. The API validates each one, generates a PDF certificate per valid recipient in the background, and lets you poll progress and download the results — individually or as a single ZIP.
@@ -22,31 +26,39 @@ Submit a list of recipients once. The API validates each one, generates a PDF ce
 
 ## Quick start
 
-**Option A — local Python**
+**Option A — nothing to install (recommended)**
+
+Open the live app: **https://bulk-certificate-generator-api-4slj.onrender.com**
+
+- Click **Load sample** → **Generate certificates** and watch the job run.
+- **Preview** any generated row, or **Download all (ZIP)**.
+- **Resend same request** shows the `Idempotency-Key` returning `200` with the same job.
+- Swagger: **https://bulk-certificate-generator-api-4slj.onrender.com/docs**
+
+Every curl example in this README targets the live app and can be pasted as-is.
+
+<details>
+<summary><b>Option B — run it yourself</b> (local Python or Docker)</summary>
 
 ```bash
 git clone https://github.com/ArunkumarBaddepalli/bulk-certificate-generator-api.git
 cd bulk-certificate-generator-api
 
+# Python
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 make install                       # = pip install -r requirements.txt
 make run                           # = uvicorn app.main:app --reload
-```
 
-**Option B — Docker**
-
-```bash
+# …or Docker
 docker compose up --build
 ```
 
-**Option C — nothing to install**
-
-Use the live demo above. Same curl commands below work against it — swap `http://127.0.0.1:8000` for `https://bulk-certificate-generator-api-4slj.onrender.com`.
-
-Either way, open http://127.0.0.1:8000/docs. The SQLite file and `storage/` folder are created on first run (inside a named volume for Docker).
+A local run serves the same UI and docs on port 8000. The SQLite file and `storage/` folder are created on first run (inside a named volume for Docker). To point the curl examples at a local run, replace the live base URL with your local one.
 
 `make test` runs the suite, `make lint` runs ruff.
+
+</details>
 
 Optional environment variables (see `.env.example`):
 
@@ -69,7 +81,7 @@ pytest
 ## Submit a certificate generation request
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/jobs \
+curl -s -X POST https://bulk-certificate-generator-api-4slj.onrender.com/jobs \
   -H "Content-Type: application/json" \
   -d @examples/request.json
 ```
@@ -110,7 +122,7 @@ curl -s -X POST http://127.0.0.1:8000/jobs \
 **Safe retries with `Idempotency-Key`**
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/jobs \
+curl -s -X POST https://bulk-certificate-generator-api-4slj.onrender.com/jobs \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: event-42-batch-1" \
   -d @examples/request.json
@@ -121,7 +133,7 @@ Send the same key again — because of a timeout, a retry loop, a double-click �
 ## Check progress
 
 ```bash
-curl -s http://127.0.0.1:8000/jobs/{job_id}
+curl -s https://bulk-certificate-generator-api-4slj.onrender.com/jobs/{job_id}
 ```
 
 ```json
@@ -153,7 +165,7 @@ curl -s http://127.0.0.1:8000/jobs/{job_id}
 **List per-recipient results** (filter and paginate):
 
 ```bash
-curl -s "http://127.0.0.1:8000/jobs/{job_id}/certificates?status=FAILED"
+curl -s "https://bulk-certificate-generator-api-4slj.onrender.com/jobs/{job_id}/certificates?status=FAILED"
 ```
 
 ```json
@@ -188,7 +200,7 @@ Query parameters: `status` (`PENDING` | `GENERATED` | `FAILED`), `limit` (1–10
 **Download one PDF:**
 
 ```bash
-curl -s -o certificate.pdf http://127.0.0.1:8000/certificates/{certificate_id}/download
+curl -s -o certificate.pdf https://bulk-certificate-generator-api-4slj.onrender.com/certificates/{certificate_id}/download
 ```
 
 Returns `application/pdf` with a `Content-Disposition: attachment` header. `404` if the id is unknown; `409` with the error message if that certificate is `FAILED`.
@@ -196,7 +208,7 @@ Returns `application/pdf` with a `Content-Disposition: attachment` header. `404`
 **Download the whole job as a ZIP:**
 
 ```bash
-curl -s -o certificates.zip http://127.0.0.1:8000/jobs/{job_id}/download
+curl -s -o certificates.zip https://bulk-certificate-generator-api-4slj.onrender.com/jobs/{job_id}/download
 ```
 
 One entry per `GENERATED` certificate, named `{recipient}_{certificate_id}.pdf`. Failed recipients are simply absent — check `?status=FAILED` for those. `409` while the job is still running; `404` if nothing was generated.
